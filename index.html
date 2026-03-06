@@ -1,56 +1,127 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Simple Cricket Game</title>
-<style>
-body{
-    text-align:center;
-    font-family:Arial;
-    background:#1e90ff;
-    color:white;
-}
-button{
-    padding:10px 20px;
-    font-size:18px;
-    margin-top:20px;
-}
-#score{
-    font-size:24px;
-    margin-top:20px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimalist Cricket Pro</title>
+    <style>
+        body { margin: 0; background: #2c3e50; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; overflow: hidden; }
+        canvas { background: #27ae60; border: 5px solid #2ecc71; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); cursor: crosshair; }
+        #ui { color: white; margin-bottom: 10px; text-align: center; }
+        .controls { color: #bdc3c7; font-size: 0.8rem; margin-top: 10px; }
+    </style>
 </head>
-
 <body>
 
-<h1>🏏 Simple Cricket Game</h1>
-<p>Click HIT to play!</p>
+    <div id="ui">
+        <h2 id="scoreBoard">Score: 0 | Balls: 0</h2>
+        <h3 id="msg">Click to Bat!</h3>
+    </div>
 
-<button onclick="play()">HIT</button>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
 
-<div id="result"></div>
-<div id="score">Score: 0</div>
+    <div class="controls">Tap/Click when the ball enters the hitting zone!</div>
 
-<script>
-let score = 0;
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const msg = document.getElementById('msg');
 
-function play(){
-    let player = Math.floor(Math.random()*7); 
-    let computer = Math.floor(Math.random()*7);
+        // Game State
+        let score = 0;
+        let ballsBowled = 0;
+        let isBallInFlight = false;
+        let ball = { x: 200, y: 0, radius: 10, speed: 5 };
+        let hitZoneY = 500;
+        let batActive = false;
 
-    if(player === computer){
-        document.getElementById("result").innerHTML =
-        "You chose " + player + " | Bowler chose " + computer + " → OUT! ❌";
-        score = 0;
-    }else{
-        score += player;
-        document.getElementById("result").innerHTML =
-        "You scored " + player + " runs 🏏";
-    }
+        function drawPitch() {
+            // Pitch
+            ctx.fillStyle = '#f1c40f';
+            ctx.fillRect(125, 0, 150, 600);
+            
+            // Crease
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(125, hitZoneY - 20, 150, 40);
+        }
 
-    document.getElementById("score").innerHTML = "Score: " + score;
-}
-</script>
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+            ctx.closePath();
+        }
 
+        function resetBall() {
+            ball.y = -20;
+            ball.x = 150 + Math.random() * 100;
+            ball.speed = 4 + Math.random() * 6;
+            isBallInFlight = true;
+            batActive = false;
+        }
+
+        function swingBat() {
+            if (!isBallInFlight || batActive) return;
+            
+            batActive = true;
+            const distance = Math.abs(ball.y - hitZoneY);
+
+            if (distance < 30) {
+                let runs = 0;
+                if (distance < 10) runs = 6;
+                else if (distance < 20) runs = 4;
+                else runs = 1;
+                
+                score += runs;
+                msg.innerText = `Shot! ${runs} Runs!`;
+                msg.style.color = "#f1c40f";
+            } else {
+                msg.innerText = "Missed! DOT Ball";
+                msg.style.color = "#ecf0f1";
+            }
+
+            ballsBowled++;
+            updateUI();
+            
+            // Delay next ball
+            setTimeout(() => {
+                isBallInFlight = false;
+            }, 500);
+        }
+
+        function updateUI() {
+            scoreBoard.innerText = `Score: ${score} | Balls: ${ballsBowled}`;
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPitch();
+
+            if (isBallInFlight) {
+                ball.y += ball.speed;
+                drawBall();
+
+                // Ball goes past bat
+                if (ball.y > canvas.height) {
+                    isBallInFlight = false;
+                    ballsBowled++;
+                    msg.innerText = "Bowled! No runs.";
+                    msg.style.color = "#e74c3c";
+                    updateUI();
+                }
+            } else {
+                // Auto-start next ball after 1.5 seconds
+                if (Math.random() < 0.02) resetBall();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener('mousedown', swingBat);
+        gameLoop();
+    </script>
 </body>
 </html>
