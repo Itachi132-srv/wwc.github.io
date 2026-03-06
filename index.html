@@ -2,197 +2,211 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cricket Pro 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cricket League Pro: Ultimate</title>
     <style>
-        body { 
-            margin: 0; 
-            background: linear-gradient(to bottom, #1a2a6c, #b21f1f, #fdbb2d); 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            overflow: hidden; 
-        }
-        #ui { 
-            color: white; 
-            text-align: center; 
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            margin-bottom: 15px;
-        }
-        canvas { 
-            background: #2ecc71; 
-            border: 8px solid #27ae60; 
-            border-radius: 15px; 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.6); 
-            cursor: pointer;
-            touch-action: none;
-        }
-        .stats { font-size: 1.5rem; font-weight: bold; }
-        .feedback { font-style: italic; color: #f1c40f; min-height: 1.2em; }
+        :root { --primary: #f1c40f; --accent: #e74c3c; }
+        body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Arial Black', sans-serif; overflow: hidden; color: white; }
+        
+        #hud { position: absolute; top: 20px; width: 90%; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
+        .stat-box { background: rgba(0,0,0,0.7); padding: 10px 20px; border-left: 5px solid var(--primary); border-radius: 4px; }
+        
+        #msg-overlay { position: absolute; top: 40%; font-size: 3rem; text-transform: uppercase; font-style: italic; text-shadow: 0 0 20px rgba(241, 196, 15, 0.8); pointer-events: none; opacity: 0; transition: 0.2s; z-index: 20; }
+        
+        canvas { background: #27ae60; cursor: pointer; box-shadow: 0 0 100px rgba(0,0,0,0.5); border-bottom: 10px solid #1e8449; }
+        
+        .instructions { position: absolute; bottom: 20px; color: rgba(255,255,255,0.5); font-size: 0.8rem; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <div class="stats" id="scoreBoard">SCORE: 0 | BALLS: 0</div>
-        <div class="feedback" id="msg">READY TO PLAY?</div>
+    <div id="hud">
+        <div class="stat-box">
+            <div style="font-size: 0.7rem; color: #aaa;">SCORE</div>
+            <div id="scoreDisplay">00 - 0</div>
+        </div>
+        <div class="stat-box">
+            <div style="font-size: 0.7rem; color: #aaa;">BALLS</div>
+            <div id="ballDisplay">0.0</div>
+        </div>
     </div>
 
-    <canvas id="gameCanvas" width="450" height="650"></canvas>
+    <div id="msg-overlay">SIXER!</div>
+
+    <canvas id="cricketCanvas"></canvas>
+
+    <div class="instructions">TAP ANYWHERE TO SWING THE BAT</div>
 
     <script>
-        const canvas = document.getElementById('gameCanvas');
+        const canvas = document.getElementById('cricketCanvas');
         const ctx = canvas.getContext('2d');
-        const scoreBoard = document.getElementById('scoreBoard');
-        const msg = document.getElementById('msg');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const ballDisplay = document.getElementById('ballDisplay');
+        const msgOverlay = document.getElementById('msg-overlay');
 
-        // Game Constants
-        const PITCH_COLOR = '#d4a373';
-        const GRASS_COLOR = '#2ecc71';
-        const HIT_ZONE_Y = 550;
+        // Layout settings
+        function resize() {
+            canvas.width = Math.min(window.innerWidth, 500);
+            canvas.height = Math.min(window.innerHeight, 800);
+        }
+        window.onresize = resize;
+        resize();
 
-        // State
-        let score = 0;
-        let ballsBowled = 0;
-        let isBallInFlight = false;
-        let batSwingTime = 0; // For animation
-        
-        let ball = {
-            z: 0,        // 0 is far away, 1 is hitting the camera
-            x: 225,      // Center
-            y: 0,        // Screen Y
-            size: 5,     // Visual radius
-            speed: 0.015,
-            drift: 0     // Random curve
-        };
+        // Game State
+        let score = 0, wickets = 0, balls = 0;
+        let isBowling = false;
+        let swingFrame = 0; // Animation for the bat
+        let ball = { x: canvas.width/2, y: 150, z: 0, speed: 0.02, active: false, hit: false };
 
-        function drawField() {
-            // Draw Grass background
-            ctx.fillStyle = GRASS_COLOR;
+        function showMessage(text, color = "#f1c40f") {
+            msgOverlay.innerText = text;
+            msgOverlay.style.color = color;
+            msgOverlay.style.opacity = "1";
+            msgOverlay.style.transform = "scale(1.2)";
+            setTimeout(() => { 
+                msgOverlay.style.opacity = "0"; 
+                msgOverlay.style.transform = "scale(1)";
+            }, 1000);
+        }
+
+        function drawStadium() {
+            // Sky & Crowd
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGrad.addColorStop(0, '#2980b9');
+            skyGrad.addColorStop(0.4, '#6dd5fa');
+            ctx.fillStyle = skyGrad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Perspective Pitch
-            ctx.fillStyle = PITCH_COLOR;
+            // Ground Perspective
+            ctx.fillStyle = '#2ecc71';
             ctx.beginPath();
-            ctx.moveTo(180, 0);      // Top Narrow
-            ctx.lineTo(270, 0);      // Top Narrow
-            ctx.lineTo(400, 650);    // Bottom Wide
-            ctx.lineTo(50, 650);     // Bottom Wide
+            ctx.moveTo(0, canvas.height);
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.lineTo(canvas.width * 0.8, canvas.height * 0.3);
+            ctx.lineTo(canvas.width * 0.2, canvas.height * 0.3);
             ctx.fill();
 
-            // Draw Crease Lines
-            ctx.strokeStyle = "rgba(255,255,255,0.6)";
-            ctx.lineWidth = 4;
-            ctx.strokeRect(80, HIT_ZONE_Y - 10, 290, 20);
+            // Pitch
+            ctx.fillStyle = '#edc9af';
+            ctx.beginPath();
+            ctx.moveTo(canvas.width * 0.35, canvas.height * 0.3);
+            ctx.lineTo(canvas.width * 0.65, canvas.height * 0.3);
+            ctx.lineTo(canvas.width * 0.85, canvas.height);
+            ctx.lineTo(canvas.width * 0.15, canvas.height);
+            ctx.fill();
+
+            // Wickets (Stumps)
+            ctx.fillStyle = '#fff';
+            for(let i = -1; i <= 1; i++) {
+                ctx.fillRect(canvas.width/2 + (i*10) - 2, canvas.height - 120, 4, 80);
+            }
         }
 
         function drawBat() {
             ctx.save();
-            ctx.translate(225, HIT_ZONE_Y);
+            ctx.translate(canvas.width/2 + 40, canvas.height - 100);
             
-            // If bat was recently clicked, rotate it
-            if (batSwingTime > 0) {
-                ctx.rotate(Math.sin(batSwingTime * 0.2) * 1.5);
-                batSwingTime--;
+            // Swing animation logic
+            if (swingFrame > 0) {
+                ctx.rotate(-Math.PI / 2 * (swingFrame / 10));
+                swingFrame--;
             }
 
-            // Bat shadow
-            ctx.fillStyle = "rgba(0,0,0,0.2)";
-            ctx.fillRect(-10, 10, 20, 80);
-            
-            // Bat wood
-            ctx.fillStyle = "#8e44ad"; // Stylish Purple Bat
-            ctx.fillRect(-15, 0, 30, 100);
-            ctx.fillStyle = "#ecf0f1"; // Handle
-            ctx.fillRect(-5, -40, 10, 40);
+            // Batting Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(-10, 10, 20, 100);
+
+            // Bat body
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(-12, -20, 24, 110);
+            ctx.fillStyle = '#222'; // Grip
+            ctx.fillRect(-6, -60, 12, 40);
             
             ctx.restore();
         }
 
-        function drawBall() {
-            if (!isBallInFlight) return;
+        function updateBall() {
+            if (!ball.active) {
+                if (Math.random() < 0.02) {
+                    ball.active = true;
+                    ball.z = 0;
+                    ball.hit = false;
+                    ball.x = (canvas.width / 2) + (Math.random() * 40 - 20);
+                }
+                return;
+            }
 
-            // Calculate "3D" position
-            // As ball.z goes from 0 to 1, ball.y goes from 0 to canvas.height
-            ball.y = ball.z * canvas.height;
-            ball.size = 5 + (ball.z * 35); // Grows from 5px to 40px
+            if (!ball.hit) {
+                ball.z += ball.speed;
+                // Calculate perspective Y
+                ball.y = 200 + (ball.z * 500);
+                
+                // Ball size increases as it gets closer
+                let size = 4 + (ball.z * 25);
 
-            // Shadow
-            ctx.fillStyle = "rgba(0,0,0,0.3)";
-            ctx.beginPath();
-            ctx.ellipse(ball.x + 10, ball.y + 10, ball.size, ball.size/2, 0, 0, Math.PI*2);
-            ctx.fill();
+                // Draw Ball
+                ctx.fillStyle = '#c0392b';
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, size, 0, Math.PI*2);
+                ctx.fill();
 
-            // Ball
-            const gradient = ctx.createRadialGradient(ball.x-5, ball.y-5, 2, ball.x, ball.y, ball.size);
-            gradient.addColorStop(0, '#ff7675');
-            gradient.addColorStop(1, '#d63031');
-            
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.size, 0, Math.PI * 2);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            ctx.closePath();
+                // Check for Clean Bowled
+                if (ball.z > 0.95 && !ball.hit) {
+                    if (ball.z > 1.1) {
+                        ball.active = false;
+                        wickets++;
+                        balls++;
+                        showMessage("OUT!", "#e74c3c");
+                        updateStats();
+                    }
+                }
+            } else {
+                // Ball fly away animation
+                ball.y -= 15;
+                ball.z -= 0.02;
+                ctx.fillStyle = '#c0392b';
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, 15, 0, Math.PI*2);
+                ctx.fill();
+                if (ball.y < -50) ball.active = false;
+            }
         }
 
         function swing() {
-            if (batSwingTime > 0) return; // Already swinging
-            batSwingTime = 15; // Set animation duration
+            if (swingFrame > 0) return;
+            swingFrame = 15;
 
-            if (isBallInFlight) {
-                const timing = Math.abs(ball.y - HIT_ZONE_Y);
-                
-                if (timing < 50) {
-                    let runs = 1;
-                    if (timing < 15) runs = 6;
-                    else if (timing < 30) runs = 4;
-                    
-                    score += runs;
-                    msg.innerText = `BOOM! ${runs} RUNS!`;
-                    msg.style.color = "#f1c40f";
-                    isBallInFlight = false; // Ball hit away
+            // Hit detection logic (z = 0.85 to 0.95 is the sweet spot)
+            if (ball.active && !ball.hit && ball.z > 0.75 && ball.z < 1.0) {
+                ball.hit = true;
+                balls++;
+                let runs = 1;
+                if (ball.z > 0.88 && ball.z < 0.94) {
+                    runs = 6;
+                    showMessage("BIG SIX!");
+                } else if (ball.z > 0.82) {
+                    runs = 4;
+                    showMessage("FOUR!");
                 } else {
-                    msg.innerText = "TOO EARLY/LATE!";
-                    msg.style.color = "#ecf0f1";
+                    showMessage("SINGLE");
                 }
+                score += runs;
+                updateStats();
             }
         }
 
-        function resetBall() {
-            isBallInFlight = true;
-            ball.z = 0;
-            ball.x = 200 + Math.random() * 50;
-            ball.speed = 0.012 + Math.random() * 0.01;
-            ball.drift = (Math.random() - 0.5) * 2;
-        }
-
-        function update() {
-            if (isBallInFlight) {
-                ball.z += ball.speed;
-                ball.x += ball.drift;
-
-                if (ball.z > 1.1) {
-                    isBallInFlight = false;
-                    ballsBowled++;
-                    msg.innerText = "DOT BALL";
-                    msg.style.color = "#e74c3c";
-                    scoreBoard.innerText = `SCORE: ${score} | BALLS: ${ballsBowled}`;
-                }
-            } else {
-                // Wait for next delivery
-                if (Math.random() < 0.015) resetBall();
-            }
+        function updateStats() {
+            scoreDisplay.innerText = `${score} - ${wickets}`;
+            const overs = Math.floor(balls / 6);
+            const remainder = balls % 6;
+            ballDisplay.innerText = `${overs}.${remainder}`;
         }
 
         function gameLoop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawField();
-            drawBall();
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+            drawStadium();
+            updateBall();
             drawBat();
-            update();
             requestAnimationFrame(gameLoop);
         }
 
