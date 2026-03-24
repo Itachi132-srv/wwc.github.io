@@ -3,31 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Bike Pro Debug Mode</title>
+    <title>Bike Pro - Final Version</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #87ceeb; touch-action: none; font-family: sans-serif; }
         #ui { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         .btn { 
-            position: absolute; bottom: 30px; width: 80px; height: 80px; 
-            border-radius: 50%; background: rgba(255,255,255,0.2); border: 2px solid #fff;
+            position: absolute; bottom: 30px; width: 85px; height: 85px; 
+            border-radius: 50%; background: rgba(0,0,0,0.6); border: 3px solid #fff;
             pointer-events: auto; display: flex; align-items: center; justify-content: center;
             color: white; font-weight: bold; user-select: none;
         }
         #btn-brake { left: 20px; border-color: #ff4444; }
         #btn-gas { right: 20px; border-color: #44ff44; }
-        #speedo { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-size: 20px; }
-        /* Debug Log Box */
-        #debug-log { 
-            position: absolute; top: 50px; left: 10px; width: 200px; 
-            font-size: 10px; color: #0f0; background: rgba(0,0,0,0.8); 
-            padding: 5px; pointer-events: none; max-height: 150px; overflow: hidden;
-        }
+        #speedo { position: absolute; top: 15px; width: 100%; text-align: center; color: white; font-size: 22px; font-weight: bold; text-shadow: 2px 2px 4px #000; }
+        #debug { position: absolute; top: 50px; left: 10px; color: #0f0; font-size: 10px; background: rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div id="debug-log">Status: Starting...</div>
+    <div id="debug">Status: Loading Models...</div>
     <div id="speedo">0 KM/H</div>
     <div id="btn-brake" class="btn">BRAKE</div>
     <div id="btn-gas" class="btn">GAS</div>
@@ -38,43 +33,32 @@
     import { OBJLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/OBJLoader.js';
     import { MTLLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/MTLLoader.js';
 
-    const logBox = document.getElementById('debug-log');
-    function log(msg) { logBox.innerHTML += "<br>" + msg; }
-
-    // 1. Scene & Camera Setup
+    const debug = document.getElementById('debug');
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.Fog(0x87ceeb, 50, 250);
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
 
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
     document.body.appendChild(renderer.domElement);
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.5));
 
-    // 2. Road & Grass (Always visible)
+    // --- ROAD & YELLOW LINE (CUSTOM MADE) ---
+    const roadWidth = 14;
     const roadGroup = new THREE.Group();
-    const roadGeo = new THREE.PlaneGeometry(15, 1000);
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+    
+    // Asphalt
+    const roadGeo = new THREE.PlaneGeometry(roadWidth, 1000);
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     const road = new THREE.Mesh(roadGeo, roadMat);
     road.rotation.x = -Math.PI / 2;
     roadGroup.add(road);
 
-    // Side Grass Areas
-    const grassGeo = new THREE.PlaneGeometry(100, 1000);
-    const grassMat = new THREE.MeshStandardMaterial({ color: 0x2d5a27 });
-    const leftGrass = new THREE.Mesh(grassGeo, grassMat);
-    leftGrass.rotation.x = -Math.PI / 2;
-    leftGrass.position.set(-57.5, -0.01, 0);
-    roadGroup.add(leftGrass);
-
-    const rightGrass = leftGrass.clone();
-    rightGrass.position.x = 57.5;
-    roadGroup.add(rightGrass);
-
-    // Yellow Line
-    const lineGeo = new THREE.PlaneGeometry(0.4, 1000);
+    // Yellow Center Line
+    const lineGeo = new THREE.PlaneGeometry(0.5, 1000);
     const lineMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
     const line = new THREE.Mesh(lineGeo, lineMat);
     line.rotation.x = -Math.PI / 2;
@@ -82,76 +66,80 @@
     roadGroup.add(line);
     scene.add(roadGroup);
 
-    // 3. Model Loading with Debugging
+    // --- MODEL LOADING ---
     let player, fences = [], trees = [];
     const mtlLoader = new MTLLoader();
     const objLoader = new OBJLoader();
 
-    function loadModel(name, mtlFile, objFile, callback) {
-        log(`Loading ${name}...`);
-        mtlLoader.load(mtlFile, (materials) => {
-            materials.preload();
-            objLoader.setMaterials(materials).load(objFile, (obj) => {
-                log(`${name} Loaded! ✅`);
-                callback(obj);
-            }, undefined, (err) => log(`${name} OBJ Error ❌`));
-        }, undefined, (err) => log(`${name} MTL Error ❌`));
+    function load(name, mtl, obj, cb) {
+        mtlLoader.load(mtl, (m) => {
+            m.preload();
+            objLoader.setMaterials(m).load(obj, cb, undefined, () => debug.innerText += `\n${name} OBJ Error`);
+        }, undefined, () => debug.innerText += `\n${name} MTL Error`);
     }
 
-    loadModel('Bike', 'car1.mtl', 'car1.obj', (o) => {
+    // Bike
+    load('Bike', 'car1.mtl', 'car1.obj', (o) => {
         player = o;
-        player.scale.set(0.15, 0.15, 0.15);
+        player.scale.set(0.18, 0.18, 0.18);
         scene.add(player);
+        debug.innerText += "\nBike Ready! ✅";
     });
 
-    loadModel('Fence', 'white1.mtl', 'white1.obj', (o) => {
-        for(let i=0; i<40; i++) {
-            let fl = o.clone(); fl.rotation.y = Math.PI/2; fl.position.set(-7.5, 0, -i*10); scene.add(fl); fences.push(fl);
-            let fr = o.clone(); fr.rotation.y = Math.PI/2; fr.position.set(7.5, 0, -i*10); scene.add(fr); fences.push(fr);
+    // Fences (Continuous - No Gaps)
+    load('Fence', 'white1.mtl', 'white1.obj', (o) => {
+        const gap = 8.5; // Is number ko kam/zyada karke gap khatam karein
+        for(let i=0; i<45; i++) {
+            let fl = o.clone(); fl.rotation.y = Math.PI/2; 
+            fl.position.set(-roadWidth/2, 0, -i*gap); scene.add(fl); fences.push(fl);
+            let fr = o.clone(); fr.rotation.y = Math.PI/2; 
+            fr.position.set(roadWidth/2, 0, -i*gap); scene.add(fr); fences.push(fr);
         }
+        debug.innerText += "\nFences Ready! ✅";
     });
 
-    loadModel('Tree', 'tree.mtl', 'tree.obj', (o) => {
+    // Trees
+    load('Tree', 'tree.mtl', 'tree.obj', (o) => {
         for(let i=0; i<15; i++) {
             let tl = o.clone(); tl.position.set(-18, 0, -i*35); scene.add(tl); trees.push(tl);
             let tr = o.clone(); tr.position.set(18, 0, -i*35); scene.add(tr); trees.push(tr);
         }
+        debug.innerText += "\nTrees Ready! ✅";
     });
 
-    // 4. Game Controls
+    // Controls
     let speed = 0, isGas = false, isBrake = false, tilt = 0;
     document.getElementById('btn-gas').onpointerdown = () => isGas = true;
     document.getElementById('btn-gas').onpointerup = () => isGas = false;
     document.getElementById('btn-brake').onpointerdown = () => isBrake = true;
     document.getElementById('btn-brake').onpointerup = () => isBrake = false;
-    window.addEventListener('deviceorientation', (e) => tilt = e.gamma / 25);
+    window.addEventListener('deviceorientation', (e) => tilt = e.gamma / 22);
 
     function animate() {
         requestAnimationFrame(animate);
-        if(isGas) speed = Math.min(speed + 0.01, 1.8);
+        if(isGas) speed = Math.min(speed + 0.015, 2.0);
         else speed = Math.max(speed - 0.005, 0);
-        if(isBrake) speed = Math.max(speed - 0.06, 0);
+        if(isBrake) speed = Math.max(speed - 0.08, 0);
 
         document.getElementById('speedo').innerText = Math.floor(speed * 100) + " KM/H";
 
-        // Everything moves back to create speed illusion
+        // Object Loop
         [...fences, ...trees].forEach(o => {
             o.position.z += speed;
-            if(o.position.z > 20) o.position.z -= 400;
+            if(o.position.z > 30) o.position.z -= 400;
         });
 
         if(player) {
             player.position.x += tilt * 0.35;
-            if(player.position.x > 7) player.position.x = 7;
-            if(player.position.x < -7) player.position.x = -7;
+            if(player.position.x > 6.5) player.position.x = 6.5;
+            if(player.position.x < -6.5) player.position.x = -6.5;
             player.rotation.z = -tilt * 0.4;
             
             // FPS Camera
-            camera.position.set(player.position.x, 1.8, 2.5);
-            camera.lookAt(player.position.x, 1, -10);
+            camera.position.set(player.position.x, 1.8, 2.8);
+            camera.lookAt(player.position.x, 0.8, -15);
         } else {
-            // Default camera if bike not loaded
-            camera.position.set(0, 5, 15);
+            camera.position.set(0, 5, 10);
             camera.lookAt(0, 0, 0);
         }
         renderer.render(scene, camera);
@@ -166,4 +154,3 @@
 </script>
 </body>
 </html>
-
