@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Bike Racing Pro</title>
+    <title>Bike Pro - Custom Road Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background: #87ceeb; touch-action: none; font-family: sans-serif; }
-        #ui { position: absolute; width: 100%; height: 100%; pointer-events: none; }
+        #ui { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         .btn { 
-            position: absolute; bottom: 40px; width: 90px; height: 90px; 
-            border-radius: 50%; background: rgba(0,0,0,0.6); border: 4px solid #fff;
+            position: absolute; bottom: 40px; width: 85px; height: 85px; 
+            border-radius: 50%; background: rgba(0,0,0,0.6); border: 3px solid #fff;
             pointer-events: auto; display: flex; align-items: center; justify-content: center;
-            color: white; font-weight: bold; font-size: 14px; user-select: none;
+            color: white; font-weight: bold; user-select: none;
         }
         #btn-brake { left: 30px; border-color: #ff4444; }
         #btn-gas { right: 30px; border-color: #44ff44; }
-        #speedo { position: absolute; top: 20px; width: 100%; text-align: center; color: white; font-size: 26px; font-weight: bold; text-shadow: 2px 2px 8px #000; }
+        #speedo { position: absolute; top: 20px; width: 100%; text-align: center; color: white; font-size: 24px; font-weight: bold; text-shadow: 2px 2px 5px #000; }
     </style>
 </head>
 <body>
@@ -32,14 +32,14 @@
     import { MTLLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/MTLLoader.js';
 
     let scene, camera, renderer, player;
-    let roads = [], trees = [], fences = [];
-    let speed = 0, maxSpeed = 2.0;
+    let roadElements = [], trees = [], fences = [];
+    let speed = 0, maxSpeed = 2.2;
     let isGas = false, isBrake = false, tiltX = 0;
 
     // 1. Scene Setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.Fog(0x87ceeb, 40, 200);
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 250);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -47,104 +47,144 @@
     renderer.setPixelRatio(window.devicePixelRatio);
     document.body.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2)); 
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-    sun.position.set(10, 30, 10);
+    sun.position.set(10, 50, 10);
     scene.add(sun);
 
+    // 2. Custom Road & Grass Creation
+    const roadWidth = 14;
+    const segmentLength = 100;
+
+    function createRoadSegment(zPos) {
+        const group = new THREE.Group();
+
+        // Asphalt (Grey Road)
+        const roadGeo = new THREE.PlaneGeometry(roadWidth, segmentLength);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        group.add(road);
+
+        // Yellow Center Line
+        const lineGeo = new THREE.PlaneGeometry(0.4, segmentLength);
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xFFD700 }); // Yellow
+        const line = new THREE.Mesh(lineGeo, lineMat);
+        line.rotation.x = -Math.PI / 2;
+        line.position.y = 0.02; 
+        group.add(line);
+
+        // Grass (Side areas using grass.png)
+        const grassTex = new THREE.TextureLoader().load('grass.png');
+        grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
+        grassTex.repeat.set(1, 5);
+        const grassMat = new THREE.MeshStandardMaterial({ map: grassTex });
+        
+        const grassL = new THREE.Mesh(new THREE.PlaneGeometry(50, segmentLength), grassMat);
+        grassL.rotation.x = -Math.PI / 2;
+        grassL.position.set(-(roadWidth/2 + 25), 0.01, 0);
+        group.add(grassL);
+
+        const grassR = grassL.clone();
+        grassR.position.set(roadWidth/2 + 25, 0.01, 0);
+        group.add(grassR);
+
+        group.position.z = zPos;
+        scene.add(group);
+        return group;
+    }
+
+    // Initial 3 segments for infinite loop
+    roads.push(createRoadSegment(0));
+    roads.push(createRoadSegment(-segmentLength));
+    roads.push(createRoadSegment(-segmentLength * 2));
+
+    // 3. Model Loading
     const mtlLoader = new MTLLoader();
     const objLoader = new OBJLoader();
 
-    // 2. Load Models
-    function loadModel(mtl, obj, callback) {
-        mtlLoader.load(mtl, (materials) => {
-            materials.preload();
-            objLoader.setMaterials(materials).load(obj, callback);
+    // Fences (Continuous - No Gaps)
+    mtlLoader.load('white1.mtl', (materials) => {
+        materials.preload();
+        objLoader.setMaterials(materials).load('white1.obj', (obj) => {
+            const fenceDist = 10; // Fence ki apni length ke hisab se ise adjust karein
+            for(let i = 0; i < 40; i++) {
+                let fl = obj.clone();
+                fl.rotation.y = Math.PI / 2;
+                fl.position.set(-roadWidth/2, 0, -i * fenceDist);
+                scene.add(fl);
+                fences.push(fl);
+
+                let fr = obj.clone();
+                fr.rotation.y = Math.PI / 2;
+                fr.position.set(roadWidth/2, 0, -i * fenceDist);
+                scene.add(fr);
+                fences.push(fr);
+            }
         });
-    }
-
-    // Road Logic (road.obj)
-    loadModel('road.mtl', 'road.obj', (obj) => {
-        for(let i = 0; i < 5; i++) {
-            let r = obj.clone();
-            r.position.z = -i * 60; // Road length 60 assume ki hai
-            scene.add(r);
-            roads.push(r);
-        }
     });
 
-    // Fence Fix (white1.obj) - Rotation Fixed
-    loadModel('white1.mtl', 'white1.obj', (obj) => {
-        for(let i = 0; i < 15; i++) {
-            let fl = obj.clone();
-            fl.rotation.y = Math.PI / 2; // parallel to road
-            fl.position.set(-6.5, 0, -i * 15);
-            scene.add(fl);
-            fences.push(fl);
-
-            let fr = obj.clone();
-            fr.rotation.y = Math.PI / 2;
-            fr.position.set(6.5, 0, -i * 15);
-            scene.add(fr);
-            fences.push(fr);
-        }
+    // Trees
+    mtlLoader.load('tree.mtl', (materials) => {
+        materials.preload();
+        objLoader.setMaterials(materials).load('tree.obj', (obj) => {
+            for(let i = 0; i < 20; i++) {
+                let tl = obj.clone(); tl.position.set(-18, 0, -i * 30); scene.add(tl); trees.push(tl);
+                let tr = obj.clone(); tr.position.set(18, 0, -i * 30); scene.add(tr); trees.push(tr);
+            }
+        });
     });
 
-    // Trees (tree.obj)
-    loadModel('tree.mtl', 'tree.obj', (obj) => {
-        for(let i = 0; i < 15; i++) {
-            let tl = obj.clone(); tl.position.set(-15, 0, -i * 25); scene.add(tl); trees.push(tl);
-            let tr = obj.clone(); tr.position.set(15, 0, -i * 25); scene.add(tr); trees.push(tr);
-        }
+    // Bike (car1)
+    mtlLoader.load('car1.mtl', (materials) => {
+        materials.preload();
+        objLoader.setMaterials(materials).load('car1.obj', (obj) => {
+            player = obj;
+            player.scale.set(0.18, 0.18, 0.18);
+            scene.add(player);
+        });
     });
 
-    // Bike (car1.obj)
-    loadModel('car1.mtl', 'car1.obj', (obj) => {
-        player = obj;
-        player.scale.set(0.18, 0.18, 0.18);
-        scene.add(player);
-    });
-
-    // 3. Controls (Mobile + PC)
+    // 4. Input & Controls
     const btnGas = document.getElementById('btn-gas');
     const btnBrake = document.getElementById('btn-brake');
+    btnGas.onpointerdown = () => isGas = true; btnGas.onpointerup = () => isGas = false;
+    btnBrake.onpointerdown = () => isBrake = true; btnBrake.onpointerup = () => isBrake = false;
 
-    btnGas.onpointerdown = () => isGas = true;
-    btnGas.onpointerup = () => isGas = false;
-    btnBrake.onpointerdown = () => isBrake = true;
-    btnBrake.onpointerup = () => isBrake = false;
+    window.addEventListener('deviceorientation', (e) => { tiltX = e.gamma / 22; });
 
-    window.addEventListener('deviceorientation', (e) => {
-        tiltX = e.gamma / 25; 
-    });
-
-    // 4. Game Loop
+    // 5. Game Loop
     function animate() {
         requestAnimationFrame(animate);
 
-        // Physics
         if (isGas) speed = THREE.MathUtils.lerp(speed, maxSpeed, 0.02);
         else speed = THREE.MathUtils.lerp(speed, 0, 0.01);
         if (isBrake) speed = THREE.MathUtils.lerp(speed, 0, 0.1);
 
         document.getElementById('speedo').innerText = `${Math.floor(speed * 120)} KM/H`;
 
-        // Movement
-        [...roads, ...fences, ...trees].forEach(o => {
+        // Infinite Road Logic
+        roads.forEach(r => {
+            r.position.z += speed;
+            if (r.position.z > segmentLength) r.position.z -= segmentLength * 3;
+        });
+
+        // Fences & Trees Loop
+        [...fences, ...trees].forEach(o => {
             o.position.z += speed;
-            if (o.position.z > 50) o.position.z -= 250; 
+            if (o.position.z > 50) o.position.z -= 400;
         });
 
         if (player) {
-            player.position.x += tiltX * 0.3;
-            // Boundary Check
-            if (player.position.x > 6) player.position.x = 6;
-            if (player.position.x < -6) player.position.x = -6;
+            player.position.x += tiltX * 0.35;
+            // Boundary: Don't cross fences
+            if (player.position.x > roadWidth/2 - 0.5) player.position.x = roadWidth/2 - 0.5;
+            if (player.position.x < -roadWidth/2 + 0.5) player.position.x = -roadWidth/2 + 0.5;
             
-            player.rotation.z = -tiltX * 0.4; // Lean animation
+            player.rotation.z = -tiltX * 0.4;
 
-            // FPS Camera (Handlebar level)
-            camera.position.set(player.position.x, 1.8, 1.3);
+            // Camera View
+            camera.position.set(player.position.x, 1.8, 1.5);
             camera.lookAt(player.position.x, 0.8, -10);
         }
 
@@ -153,8 +193,7 @@
     animate();
 
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
+        camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 </script>
