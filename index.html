@@ -2,218 +2,121 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cricket League Pro: Ultimate</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Endless Road Bike Game</title>
     <style>
-        :root { --primary: #f1c40f; --accent: #e74c3c; }
-        body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Arial Black', sans-serif; overflow: hidden; color: white; }
-        
-        #hud { position: absolute; top: 20px; width: 90%; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
-        .stat-box { background: rgba(0,0,0,0.7); padding: 10px 20px; border-left: 5px solid var(--primary); border-radius: 4px; }
-        
-        #msg-overlay { position: absolute; top: 40%; font-size: 3rem; text-transform: uppercase; font-style: italic; text-shadow: 0 0 20px rgba(241, 196, 15, 0.8); pointer-events: none; opacity: 0; transition: 0.2s; z-index: 20; }
-        
-        canvas { background: #27ae60; cursor: pointer; box-shadow: 0 0 100px rgba(0,0,0,0.5); border-bottom: 10px solid #1e8449; }
-        
-        .instructions { position: absolute; bottom: 20px; color: rgba(255,255,255,0.5); font-size: 0.8rem; letter-spacing: 1px; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
-    <div id="hud">
-        <div class="stat-box">
-            <div style="font-size: 0.7rem; color: #aaa;">SCORE</div>
-            <div id="scoreDisplay">00 - 0</div>
-        </div>
-        <div class="stat-box">
-            <div style="font-size: 0.7rem; color: #aaa;">BALLS</div>
-            <div id="ballDisplay">0.0</div>
-        </div>
-    </div>
+<div id="instructions">Use A/D or Left/Right arrows to move</div>
 
-    <div id="msg-overlay">SIXER!</div>
+<script type="module">
+    import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+    import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/GLTFLoader.js';
 
-    <canvas id="cricketCanvas"></canvas>
+    // 1. Scene Setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // Sky blue
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-    <div class="instructions">TAP ANYWHERE TO SWING THE BAT</div>
+    // 2. Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(0, 10, 5);
+    scene.add(dirLight);
 
-    <script>
-        const canvas = document.getElementById('cricketCanvas');
-        const ctx = canvas.getContext('2d');
-        const scoreDisplay = document.getElementById('scoreDisplay');
-        const ballDisplay = document.getElementById('ballDisplay');
-        const msgOverlay = document.getElementById('msg-overlay');
+    // 3. The Road (Endless Logic)
+    const roadGeometry = new THREE.PlaneGeometry(10, 100);
+    const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    
+    const road1 = new THREE.Mesh(roadGeometry, roadMaterial);
+    road1.rotation.x = -Math.PI / 2;
+    scene.add(road1);
 
-        // Layout settings
-        function resize() {
-            canvas.width = Math.min(window.innerWidth, 500);
-            canvas.height = Math.min(window.innerHeight, 800);
-        }
-        window.onresize = resize;
-        resize();
+    const road2 = road1.clone();
+    road2.position.z = -100;
+    scene.add(road2);
 
-        // Game State
-        let score = 0, wickets = 0, balls = 0;
-        let isBowling = false;
-        let swingFrame = 0; // Animation for the bat
-        let ball = { x: canvas.width/2, y: 150, z: 0, speed: 0.02, active: false, hit: false };
+    // 4. Load your Model (car1)
+    let player;
+    const loader = new GLTFLoader();
+    
+    // Yahan car1.glb aapki file ka naam hona chahiye
+    loader.load('car1.glb', (gltf) => {
+        player = gltf.scene;
+        player.scale.set(0.5, 0.5, 0.5); // Size adjust karein
+        player.position.y = 0.5;
+        scene.add(player);
+    }, undefined, (error) => {
+        console.error("Model load nahi hua, check karein car1.glb same folder me hai ya nahi.");
+        // Placeholder agar model na mile
+        const geo = new THREE.BoxGeometry(1, 1, 2);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        player = new THREE.Mesh(geo, mat);
+        player.position.y = 0.5;
+        scene.add(player);
+    });
 
-        function showMessage(text, color = "#f1c40f") {
-            msgOverlay.innerText = text;
-            msgOverlay.style.color = color;
-            msgOverlay.style.opacity = "1";
-            msgOverlay.style.transform = "scale(1.2)";
-            setTimeout(() => { 
-                msgOverlay.style.opacity = "0"; 
-                msgOverlay.style.transform = "scale(1)";
-            }, 1000);
-        }
+    camera.position.set(0, 3, 7);
+    camera.lookAt(0, 0, 0);
 
-        function drawStadium() {
-            // Sky & Crowd
-            const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            skyGrad.addColorStop(0, '#2980b9');
-            skyGrad.addColorStop(0.4, '#6dd5fa');
-            ctx.fillStyle = skyGrad;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // 5. Movement Logic
+    let moveLeft = false;
+    let moveRight = false;
 
-            // Ground Perspective
-            ctx.fillStyle = '#2ecc71';
-            ctx.beginPath();
-            ctx.moveTo(0, canvas.height);
-            ctx.lineTo(canvas.width, canvas.height);
-            ctx.lineTo(canvas.width * 0.8, canvas.height * 0.3);
-            ctx.lineTo(canvas.width * 0.2, canvas.height * 0.3);
-            ctx.fill();
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = true;
+        if (e.key === 'd' || e.key === 'ArrowRight') moveRight = true;
+    });
+    window.addEventListener('keyup', (e) => {
+        if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = false;
+        if (e.key === 'd' || e.key === 'ArrowRight') moveRight = false;
+    });
 
-            // Pitch
-            ctx.fillStyle = '#edc9af';
-            ctx.beginPath();
-            ctx.moveTo(canvas.width * 0.35, canvas.height * 0.3);
-            ctx.lineTo(canvas.width * 0.65, canvas.height * 0.3);
-            ctx.lineTo(canvas.width * 0.85, canvas.height);
-            ctx.lineTo(canvas.width * 0.15, canvas.height);
-            ctx.fill();
+    // 6. Animation Loop
+    const speed = 0.5;
+    function animate() {
+        requestAnimationFrame(animate);
 
-            // Wickets (Stumps)
-            ctx.fillStyle = '#fff';
-            for(let i = -1; i <= 1; i++) {
-                ctx.fillRect(canvas.width/2 + (i*10) - 2, canvas.height - 120, 4, 80);
-            }
-        }
+        // Road Movement
+        road1.position.z += speed;
+        road2.position.z += speed;
 
-        function drawBat() {
-            ctx.save();
-            ctx.translate(canvas.width/2 + 40, canvas.height - 100);
-            
-            // Swing animation logic
-            if (swingFrame > 0) {
-                ctx.rotate(-Math.PI / 2 * (swingFrame / 10));
-                swingFrame--;
-            }
+        if (road1.position.z > 50) road1.position.z = road2.position.z - 100;
+        if (road2.position.z > 50) road2.position.z = road1.position.z - 100;
 
-            // Batting Shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.2)';
-            ctx.fillRect(-10, 10, 20, 100);
-
-            // Bat body
-            ctx.fillStyle = '#5d4037';
-            ctx.fillRect(-12, -20, 24, 110);
-            ctx.fillStyle = '#222'; // Grip
-            ctx.fillRect(-6, -60, 12, 40);
-            
-            ctx.restore();
+        // Player movement
+        if (player) {
+            if (moveLeft && player.position.x > -4) player.position.x -= 0.1;
+            if (moveRight && player.position.x < 4) player.position.x += 0.1;
         }
 
-        function updateBall() {
-            if (!ball.active) {
-                if (Math.random() < 0.02) {
-                    ball.active = true;
-                    ball.z = 0;
-                    ball.hit = false;
-                    ball.x = (canvas.width / 2) + (Math.random() * 40 - 20);
-                }
-                return;
-            }
+        renderer.render(scene, camera);
+    }
+    animate();
 
-            if (!ball.hit) {
-                ball.z += ball.speed;
-                // Calculate perspective Y
-                ball.y = 200 + (ball.z * 500);
-                
-                // Ball size increases as it gets closer
-                let size = 4 + (ball.z * 25);
-
-                // Draw Ball
-                ctx.fillStyle = '#c0392b';
-                ctx.beginPath();
-                ctx.arc(ball.x, ball.y, size, 0, Math.PI*2);
-                ctx.fill();
-
-                // Check for Clean Bowled
-                if (ball.z > 0.95 && !ball.hit) {
-                    if (ball.z > 1.1) {
-                        ball.active = false;
-                        wickets++;
-                        balls++;
-                        showMessage("OUT!", "#e74c3c");
-                        updateStats();
-                    }
-                }
-            } else {
-                // Ball fly away animation
-                ball.y -= 15;
-                ball.z -= 0.02;
-                ctx.fillStyle = '#c0392b';
-                ctx.beginPath();
-                ctx.arc(ball.x, ball.y, 15, 0, Math.PI*2);
-                ctx.fill();
-                if (ball.y < -50) ball.active = false;
-            }
-        }
-
-        function swing() {
-            if (swingFrame > 0) return;
-            swingFrame = 15;
-
-            // Hit detection logic (z = 0.85 to 0.95 is the sweet spot)
-            if (ball.active && !ball.hit && ball.z > 0.75 && ball.z < 1.0) {
-                ball.hit = true;
-                balls++;
-                let runs = 1;
-                if (ball.z > 0.88 && ball.z < 0.94) {
-                    runs = 6;
-                    showMessage("BIG SIX!");
-                } else if (ball.z > 0.82) {
-                    runs = 4;
-                    showMessage("FOUR!");
-                } else {
-                    showMessage("SINGLE");
-                }
-                score += runs;
-                updateStats();
-            }
-        }
-
-        function updateStats() {
-            scoreDisplay.innerText = `${score} - ${wickets}`;
-            const overs = Math.floor(balls / 6);
-            const remainder = balls % 6;
-            ballDisplay.innerText = `${overs}.${remainder}`;
-        }
-
-        function gameLoop() {
-            ctx.clearRect(0,0, canvas.width, canvas.height);
-            drawStadium();
-            updateBall();
-            drawBat();
-            requestAnimationFrame(gameLoop);
-        }
-
-        canvas.addEventListener('mousedown', swing);
-        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); swing(); });
-
-        gameLoop();
-    </script>
+    // Resize handling
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
 </body>
 </html>
+
