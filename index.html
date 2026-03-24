@@ -2,27 +2,31 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bike Endless Road Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Bike Pro - FPS Mobile</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            background: rgba(0,0,0,0.7);
-            padding: 15px;
-            border-radius: 8px;
-            pointer-events: none;
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Arial', sans-serif; touch-action: none; }
+        #ui-container { position: absolute; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* Buttons Setup */
+        .btn { 
+            position: absolute; bottom: 30px; width: 80px; height: 80px; 
+            border-radius: 50%; background: rgba(255,255,255,0.2); 
+            border: 2px solid white; pointer-events: auto;
+            display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;
         }
+        #btn-brake { left: 30px; background: rgba(255, 0, 0, 0.3); }
+        #btn-gas { right: 30px; background: rgba(0, 255, 0, 0.3); }
+        
+        #speedo { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: white; font-size: 20px; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <b>Bike Game</b><br>
-    Controls: A / D or Arrow Keys
+<div id="ui-container">
+    <div id="speedo">Speed: 0 km/h</div>
+    <div id="btn-brake" class="btn">BRAKE</div>
+    <div id="btn-gas" class="btn">GAS</div>
 </div>
 
 <script type="module">
@@ -30,94 +34,142 @@
     import { OBJLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/OBJLoader.js';
     import { MTLLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/MTLLoader.js';
 
+    let scene, camera, renderer, player, fenceLeft, fenceRight;
+    let speed = 0;
+    const maxSpeed = 1.5;
+    let isGas = false, isBrake = false;
+    let tiltX = 0;
+
     // 1. Scene Setup
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // Sky Blue
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 150);
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
     document.body.appendChild(renderer.domElement);
 
-    // 2. Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(5, 10, 7);
-    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1);
+    sun.position.set(5, 20, 10);
+    scene.add(sun);
 
-    // 3. Endless Road Logic
-    const roadGeo = new THREE.PlaneGeometry(12, 200);
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-    
-    const road1 = new THREE.Mesh(roadGeo, roadMat);
-    road1.rotation.x = -Math.PI / 2;
-    scene.add(road1);
+    // 2. Road with White Lines
+    const roadGroup = new THREE.Group();
+    const roadGeo = new THREE.PlaneGeometry(15, 500);
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = -Math.PI / 2;
+    roadGroup.add(road);
 
-    const road2 = road1.clone();
-    road2.position.z = -200;
-    scene.add(road2);
+    // White Lines
+    for(let i = 0; i < 20; i++) {
+        const lineGeo = new THREE.PlaneGeometry(0.3, 10);
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const line = new THREE.Mesh(lineGeo, lineMat);
+        line.rotation.x = -Math.PI / 2;
+        line.position.set(0, 0.02, -i * 25);
+        roadGroup.add(line);
+    }
+    scene.add(roadGroup);
 
-    // 4. MODEL LOADING (car1.obj)
-    let player;
+    // 3. Load Fences (white1.obj)
     const mtlLoader = new MTLLoader();
-    
-    // Ye line car1.mtl load karti hai
-    mtlLoader.load('car1.mtl', (materials) => {
+    mtlLoader.load('white1.mtl', (materials) => {
         materials.preload();
-        
         const objLoader = new OBJLoader();
         objLoader.setMaterials(materials);
-        
-        // Ye line car1.obj load karti hai
-        objLoader.load('car1.obj', (object) => {
-            player = object;
-            player.scale.set(0.2, 0.2, 0.2); // Agar bike choti dikhe toh 0.5 kar dena
-            player.position.y = 0.1;
-            scene.add(player);
-        }, undefined, (err) => {
-            console.error("Model load nahi ho paya, file name check karein.");
+        objLoader.load('white1.obj', (object) => {
+            fenceLeft = object.clone();
+            fenceLeft.position.set(-7.5, 0, 0);
+            scene.add(fenceLeft);
+
+            fenceRight = object.clone();
+            fenceRight.position.set(7.5, 0, 0);
+            scene.add(fenceRight);
         });
     });
 
-    camera.position.set(0, 4, 10);
-    camera.lookAt(0, 0, 0);
-
-    // 5. Controls
-    let keys = { left: false, right: false };
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'a' || e.key === 'ArrowLeft') keys.left = true;
-        if (e.key === 'd' || e.key === 'ArrowRight') keys.right = true;
+    // 4. Load Bike (FPS View Setup)
+    mtlLoader.load('car1.mtl', (materials) => {
+        materials.preload();
+        const objLoader = new OBJLoader();
+        objLoader.setMaterials(materials);
+        objLoader.load('car1.obj', (object) => {
+            player = object;
+            player.scale.set(0.2, 0.2, 0.2);
+            player.position.set(0, 0.1, 0);
+            scene.add(player);
+        });
     });
-    window.addEventListener('keyup', (e) => {
-        if (e.key === 'a' || e.key === 'ArrowLeft') keys.left = false;
-        if (e.key === 'd' || e.key === 'ArrowRight') keys.right = false;
+
+    // 5. Controls & Mobile Tilt
+    const btnGas = document.getElementById('btn-gas');
+    const btnBrake = document.getElementById('btn-brake');
+
+    btnGas.ontouchstart = () => isGas = true;
+    btnGas.ontouchend = () => isGas = false;
+    btnBrake.ontouchstart = () => isBrake = true;
+    btnBrake.ontouchend = () => isBrake = false;
+
+    // PC Keyboard
+    window.onkeydown = (e) => {
+        if(e.key === 'w' || e.key === 'ArrowUp') isGas = true;
+        if(e.key === 's' || e.key === 'ArrowDown') isBrake = true;
+    };
+    window.onkeyup = (e) => {
+        if(e.key === 'w' || e.key === 'ArrowUp') isGas = false;
+        if(e.key === 's' || e.key === 'ArrowDown') isBrake = false;
+    };
+
+    // Accelerometer (Tilt)
+    window.addEventListener('deviceorientation', (e) => {
+        tiltX = e.gamma / 30; // Tilt sensitivity
     });
 
-    // 6. Game Loop
-    const gameSpeed = 0.7;
+    // 6. Animation Logic
     function animate() {
         requestAnimationFrame(animate);
 
-        // Road Animation
-        road1.position.z += gameSpeed;
-        road2.position.z += gameSpeed;
+        // Speed Logic
+        if (isGas) speed = THREE.MathUtils.lerp(speed, maxSpeed, 0.02);
+        else speed = THREE.MathUtils.lerp(speed, 0, 0.01);
+        if (isBrake) speed = THREE.MathUtils.lerp(speed, 0, 0.1);
 
-        if (road1.position.z > 100) road1.position.z = road2.position.z - 200;
-        if (road2.position.z > 100) road2.position.z = road1.position.z - 200;
+        document.getElementById('speedo').innerText = `Speed: ${Math.floor(speed * 100)} km/h`;
 
-        // Player Movement
+        // Infinite Road & Lines Movement
+        roadGroup.children.forEach(child => {
+            child.position.z += speed;
+            if (child.position.z > 20) child.position.z -= 250;
+        });
+
         if (player) {
-            if (keys.left && player.position.x > -5) player.position.x -= 0.15;
-            if (keys.right && player.position.x < 5) player.position.x += 0.15;
+            // Horizontal Movement (PC keys or Tilt)
+            let move = tiltX;
+            if (window.innerWidth > 800) { // PC keys backup
+                if (tiltX === 0) { /* handle mouse or keys */ }
+            }
+            player.position.x += move * 0.2;
             
-            // Camera follow
-            camera.position.x = player.position.x * 0.4;
+            // Fencing (Don't let player go out)
+            if (player.position.x > 6.5) player.position.x = 6.5;
+            if (player.position.x < -6.5) player.position.x = -6.5;
+
+            // FPS Camera: Handlebar view
+            camera.position.set(player.position.x, 1.8, 1); 
+            camera.lookAt(player.position.x, 1, -10);
+            
+            // Subtle bike tilt animation
+            player.rotation.z = -move * 0.5;
         }
 
         renderer.render(scene, camera);
     }
     animate();
 
-    // Window Resize
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
