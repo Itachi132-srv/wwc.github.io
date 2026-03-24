@@ -3,114 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Endless Road Bike Game</title>
+    <title>Bike Endless Road Game</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #instructions {
+        #ui {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 20px;
+            left: 20px;
             color: white;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
             pointer-events: none;
         }
     </style>
 </head>
 <body>
 
-<div id="instructions">Use A/D or Left/Right arrows to move</div>
+<div id="ui">
+    <b>Bike Game</b><br>
+    Controls: A / D or Arrow Keys
+</div>
 
 <script type="module">
     import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
-    import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/GLTFLoader.js';
+    import { OBJLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/OBJLoader.js';
+    import { MTLLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/MTLLoader.js';
 
     // 1. Scene Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // Sky blue
+    scene.background = new THREE.Color(0x87ceeb); // Sky Blue
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
     // 2. Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(0, 10, 5);
+    dirLight.position.set(5, 10, 7);
     scene.add(dirLight);
 
-    // 3. The Road (Endless Logic)
-    const roadGeometry = new THREE.PlaneGeometry(10, 100);
-    const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    // 3. Endless Road Logic
+    const roadGeo = new THREE.PlaneGeometry(12, 200);
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     
-    const road1 = new THREE.Mesh(roadGeometry, roadMaterial);
+    const road1 = new THREE.Mesh(roadGeo, roadMat);
     road1.rotation.x = -Math.PI / 2;
     scene.add(road1);
 
     const road2 = road1.clone();
-    road2.position.z = -100;
+    road2.position.z = -200;
     scene.add(road2);
 
-    // 4. Load your Model (car1)
+    // 4. MODEL LOADING (car1.obj)
     let player;
-    const loader = new GLTFLoader();
+    const mtlLoader = new MTLLoader();
     
-    // Yahan car1.glb aapki file ka naam hona chahiye
-    loader.load('car1.glb', (gltf) => {
-        player = gltf.scene;
-        player.scale.set(0.5, 0.5, 0.5); // Size adjust karein
-        player.position.y = 0.5;
-        scene.add(player);
-    }, undefined, (error) => {
-        console.error("Model load nahi hua, check karein car1.glb same folder me hai ya nahi.");
-        // Placeholder agar model na mile
-        const geo = new THREE.BoxGeometry(1, 1, 2);
-        const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-        player = new THREE.Mesh(geo, mat);
-        player.position.y = 0.5;
-        scene.add(player);
+    // Ye line car1.mtl load karti hai
+    mtlLoader.load('car1.mtl', (materials) => {
+        materials.preload();
+        
+        const objLoader = new OBJLoader();
+        objLoader.setMaterials(materials);
+        
+        // Ye line car1.obj load karti hai
+        objLoader.load('car1.obj', (object) => {
+            player = object;
+            player.scale.set(0.2, 0.2, 0.2); // Agar bike choti dikhe toh 0.5 kar dena
+            player.position.y = 0.1;
+            scene.add(player);
+        }, undefined, (err) => {
+            console.error("Model load nahi ho paya, file name check karein.");
+        });
     });
 
-    camera.position.set(0, 3, 7);
+    camera.position.set(0, 4, 10);
     camera.lookAt(0, 0, 0);
 
-    // 5. Movement Logic
-    let moveLeft = false;
-    let moveRight = false;
-
+    // 5. Controls
+    let keys = { left: false, right: false };
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = true;
-        if (e.key === 'd' || e.key === 'ArrowRight') moveRight = true;
+        if (e.key === 'a' || e.key === 'ArrowLeft') keys.left = true;
+        if (e.key === 'd' || e.key === 'ArrowRight') keys.right = true;
     });
     window.addEventListener('keyup', (e) => {
-        if (e.key === 'a' || e.key === 'ArrowLeft') moveLeft = false;
-        if (e.key === 'd' || e.key === 'ArrowRight') moveRight = false;
+        if (e.key === 'a' || e.key === 'ArrowLeft') keys.left = false;
+        if (e.key === 'd' || e.key === 'ArrowRight') keys.right = false;
     });
 
-    // 6. Animation Loop
-    const speed = 0.5;
+    // 6. Game Loop
+    const gameSpeed = 0.7;
     function animate() {
         requestAnimationFrame(animate);
 
-        // Road Movement
-        road1.position.z += speed;
-        road2.position.z += speed;
+        // Road Animation
+        road1.position.z += gameSpeed;
+        road2.position.z += gameSpeed;
 
-        if (road1.position.z > 50) road1.position.z = road2.position.z - 100;
-        if (road2.position.z > 50) road2.position.z = road1.position.z - 100;
+        if (road1.position.z > 100) road1.position.z = road2.position.z - 200;
+        if (road2.position.z > 100) road2.position.z = road1.position.z - 200;
 
-        // Player movement
+        // Player Movement
         if (player) {
-            if (moveLeft && player.position.x > -4) player.position.x -= 0.1;
-            if (moveRight && player.position.x < 4) player.position.x += 0.1;
+            if (keys.left && player.position.x > -5) player.position.x -= 0.15;
+            if (keys.right && player.position.x < 5) player.position.x += 0.15;
+            
+            // Camera follow
+            camera.position.x = player.position.x * 0.4;
         }
 
         renderer.render(scene, camera);
     }
     animate();
 
-    // Resize handling
+    // Window Resize
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -119,4 +126,3 @@
 </script>
 </body>
 </html>
-
