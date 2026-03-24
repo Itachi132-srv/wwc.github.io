@@ -1,0 +1,13 @@
+# Blender 5.0.0 MTL File: 'Steel fence 452x11x100.blend'
+# www.blender.org
+
+newmtl Steel_fence_452x11x100
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd Textures/Steel fence 452x11x100_BaseColor.jpg
+map_Ns Textures/Steel fence 452x11x100_Roughness.jpg
+map_Bump -bm 1.000000 Textures/Steel fence 452x11x100_Normal.jpg
